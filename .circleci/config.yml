@@ -1,0 +1,54 @@
+version: 2
+jobs:
+  deploy-admin:
+    docker:
+      - image: circleci/node:8.10
+    environment:
+      AWS_CONFIG_PATH: /home/circleci/.aws
+    steps:
+      - checkout
+      - restore_cache:
+          key: dependency-cache-{{ checksum "admin/yarn.lock" }}
+      - run:
+          name: Install dependencies
+          command: |
+            cd admin
+            yarn install
+      - save_cache:
+          key: dependency-cache-{{ checksum "admin/yarn.lock" }}
+          paths:
+            - ./node_modules
+      - run:
+          name: Install awscli
+          working_directory: /
+          command: |
+            sudo curl -O https://bootstrap.pypa.io/get-pip.py
+            sudo python2.7 get-pip.py
+            sudo apt-get update
+            sudo apt-get install python-pip libpython-dev groff
+            sudo pip install awscli
+      - run:
+          name: Build AWS config
+          command: |
+            sudo mkdir $AWS_CONFIG_PATH
+            sudo AWS_CONFIG_PATH=$AWS_CONFIG_PATH AWS_MASTER_ACCESS_KEY_ID=$AWS_MASTER_ACCESS_KEY_ID AWS_MASTER_SECRET_ACCESS_KEY=$AWS_MASTER_SECRET_ACCESS_KEY node build_aws_profile
+      - run:
+          name: Build admin
+          command: |
+            cd admin
+            yarn build
+      - run:
+          name: Deploy admin to S3
+          command: |
+            cd admin
+            yarn deploy-build
+
+workflows:
+  version: 2
+  deploy:
+    jobs:
+      - deploy-admin:
+          filters:
+            branches:
+              only:
+                - master
